@@ -2,7 +2,7 @@
 from math import log10
 from argparse import ArgumentParser
 
-from mido import MidiFile, tempo2bpm, merge_tracks
+from mido import Message, MidiFile, tempo2bpm, merge_tracks
 
 """
 MIDI to ctrmml converter.
@@ -47,9 +47,9 @@ def pan2mdsdrv(pan):
     """
     Convert MIDI panning to FM enable flags
     """
-    if msg.value < 64:
+    if pan < 64:
         return 2
-    elif msg.value == 64:
+    elif pan == 64:
         return 3
     else:
         return 1
