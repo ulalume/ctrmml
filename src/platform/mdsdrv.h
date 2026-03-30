@@ -64,6 +64,10 @@ class MDSDRV_Data
 		void add_pitch_envelope(uint16_t id, const Tag& tag);
 		void add_extended_pitch_envelope(uint16_t id, const Tag& tag);
 
+		const std::map<uint16_t, InstrumentType>& get_ins_type_map() const { return ins_type; }
+		const std::map<uint16_t, int>& get_envelope_map_view() const { return envelope_map; }
+		const std::vector<std::vector<uint8_t>>& get_data_bank() const { return data_bank; }
+
 	private:
 		static const int data_count_max = 256;
 
