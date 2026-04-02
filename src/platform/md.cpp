@@ -26,7 +26,7 @@ MD_Channel::MD_Channel(MD_Driver& driver, int id)
 	key_on_flag(0),
 	note_pitch(0xffff),
 	porta_value(0),
-	last_pitch(0),
+	last_pitch(0xffff),
 	pitch_env_data(0),
 	pitch_env_extend(0),
 	pitch_env_delay(0),
