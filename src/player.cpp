@@ -38,6 +38,40 @@ Basic_Player::~Basic_Player()
 {
 }
 
+//! Replace the song/track this player iterates from scratch.
+/*!
+ *  Used by Driver::relink_song() to swap to a newly compiled Song
+ *  without destroying higher-level channel state. After this call
+ *  the iterator points before any event of the new track and
+ *  play_time is 0; callers typically follow with skip_ticks() to
+ *  advance to the desired playback position.
+ *
+ *  Subclass state (Player::track_state, platform_state, last_note,
+ *  etc.) is intentionally preserved.
+ */
+void Basic_Player::rebind(Song& new_song, Track& new_track)
+{
+	song = &new_song;
+	track = &new_track;
+	enabled = true;
+	position = 0;
+	loop_position = -1;
+	loop_reset_position = -1;
+	loop_count = -1;
+	loop_reset_count = 0;
+	loop_begin_depth = 0;
+	while(!stack.empty()) stack.pop();
+	for(unsigned int i = 0; i < Player_Stack::MAX_STACK_TYPE; i++)
+		stack_depth[i] = 0;
+	track_event = nullptr;
+	reference.reset();
+	event = {Event::NOP, 0, 0, 0, UINT_MAX, nullptr};
+	on_time = 0;
+	off_time = 0;
+	play_time = 0;
+	loop_play_time = -1;
+}
+
 //! Play one event.
 /*!
  *  This function first reads an event from the track. Then calls the

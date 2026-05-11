@@ -62,6 +62,16 @@ class Basic_Player
 		void step_event();
 		void reset_loop_count();
 
+		//! Replace the song/track this player iterates.
+		//!
+		//! Resets the iterator state (event position, loop bookkeeping,
+		//! stack, on/off counters, play_time) to the start of the new
+		//! track. Derived state in subclasses (Player::track_state,
+		//! platform_state, last_note, etc.) is intentionally preserved so
+		//! callers can fast-forward to a target tick via skip_ticks()
+		//! without losing channel context.
+		void rebind(Song& new_song, Track& new_track);
+
 		bool is_enabled() const;
 		bool is_inside_loop() const;
 		bool is_inside_jump() const;
