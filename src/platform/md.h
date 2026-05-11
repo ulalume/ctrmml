@@ -301,6 +301,7 @@ class MD_Driver : public Driver
 		uint8_t bpm_to_delta(uint16_t bpm);
 		void seq_update();
 		void reset_loop_count();
+		std::unique_ptr<MD_Channel> make_channel_for_track(int track_id);
 
 		MDSDRV_Data data;
 		MD_PCMDriver pcm;

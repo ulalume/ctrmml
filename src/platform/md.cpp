@@ -7,6 +7,7 @@
 #include <climits>
 #include <algorithm>
 #include <cmath>
+#include <set>
 
 #include "md.h"
 #include "mdsdrv.h"
@@ -102,6 +103,17 @@ void MD_Channel::hot_relink(Song& new_song, Track& new_track, uint32_t current_t
 	macro_carry = false;
 	if(current_tick)
 		skip_ticks(current_tick);
+	// Tempo lives on MD_Driver, not on the chip, so flushing it now is
+	// safe and lets the new song's tempo take effect immediately.
+	// Channel-local state (volume, pan, instrument, etc.) stays in
+	// track_state with its update flag set; the next musical event
+	// processed by the channel will flush it naturally, avoiding a
+	// chip-write click at the moment of the relink.
+	if(get_update_flag(Event::TEMPO))
+	{
+		update_tempo();
+		clear_update_flag(Event::TEMPO);
+	}
 }
 
 void MD_Channel::silence()
@@ -1333,6 +1345,25 @@ MD_Driver::MD_Driver(unsigned int rate, VGM_Interface* vgm_interface, int pcm_mo
 	pcm_delta = rate/pcm_rate;
 }
 
+//! Construct the channel object responsible for a given track id.
+/*!
+ *  Track id ranges follow the MD platform convention: 0..5 = FM,
+ *  6..8 = PSG melody, 9 = PSG noise, 10..15 = dummy / PCM slots.
+ *  Returns nullptr for ids outside that range.
+ */
+std::unique_ptr<MD_Channel> MD_Driver::make_channel_for_track(int id)
+{
+	if(id < 6)
+		return std::make_unique<MD_FM>(*this, id, id);
+	else if(id < 9)
+		return std::make_unique<MD_PSGMelody>(*this, id, id - 6);
+	else if(id < 10)
+		return std::make_unique<MD_PSGNoise>(*this, id, id - 6);
+	else if(id < 16)
+		return std::make_unique<MD_Dummy>(*this, id, id - 10);
+	return nullptr;
+}
+
 //! Initiate playback
 void MD_Driver::play_song(Song& song)
 {
@@ -1359,14 +1390,9 @@ void MD_Driver::play_song(Song& song)
 	for(auto it=song.get_track_map().begin(); it != song.get_track_map().end(); it++)
 	{
 		int id = it->first;
-		if(id < 6)
-			channels.push_back(std::make_unique<MD_FM>(*this, id, id));
-		else if(id < 9)
-			channels.push_back(std::make_unique<MD_PSGMelody>(*this, id, id-6));
-		else if(id < 10)
-			channels.push_back(std::make_unique<MD_PSGNoise>(*this, id, id-6));
-		else if(id < 16)
-			channels.push_back(std::make_unique<MD_Dummy>(*this, id, id-10));
+		std::unique_ptr<MD_Channel> ch = make_channel_for_track(id);
+		if(ch)
+			channels.push_back(std::move(ch));
 	}
 }
 
@@ -1398,10 +1424,12 @@ void MD_Driver::skip_ticks(unsigned int ticks)
  *  currently sounding continue uninterrupted.
  *
  *  Channels whose track id no longer exists in the new song are
- *  silenced. Tracks that only exist in the new song are not promoted
- *  to fresh channels — that would emit chip init writes and click.
- *  Master timeline state (ticks, tempo, sequencer/pcm counters) is
- *  preserved so play_step() continues from the same instant.
+ *  silenced. Tracks that did not exist before are promoted to fresh
+ *  channels and fast-forwarded; their chip-init writes (TL=max,
+ *  key-off) only touch slots that were previously silent, so no
+ *  audible click. Master timeline state (ticks, tempo, sequencer/pcm
+ *  counters) is preserved so play_step() continues from the same
+ *  instant.
  */
 void MD_Driver::relink_song(Song& new_song, uint32_t current_tick)
 {
@@ -1409,17 +1437,38 @@ void MD_Driver::relink_song(Song& new_song, uint32_t current_tick)
 	data.read_song(new_song);
 
 	const auto& track_map = new_song.get_track_map();
+	std::set<int> existing_ids;
 	for(auto& ch_ptr : channels)
 	{
 		MD_Channel* ch = ch_ptr.get();
-		auto it = track_map.find(ch->get_track_id());
+		int id = ch->get_track_id();
+		existing_ids.insert(id);
+		auto it = track_map.find(id);
 		if(it == track_map.end())
 		{
 			ch->silence();
 			continue;
 		}
-		ch->hot_relink(new_song, new_song.get_track(ch->get_track_id()), current_tick);
+		ch->hot_relink(new_song, new_song.get_track(id), current_tick);
 	}
+
+	// Tracks newly introduced by this compile get a fresh channel and
+	// are fast-forwarded to the current tick. Construction writes init
+	// state (TL=max, key-off) to the channel's chip slot which is
+	// already silent, so no audible artifact.
+	for(auto it = track_map.begin(); it != track_map.end(); it++)
+	{
+		int id = it->first;
+		if(existing_ids.count(id))
+			continue;
+		std::unique_ptr<MD_Channel> ch = make_channel_for_track(id);
+		if(!ch)
+			continue;
+		if(current_tick)
+			ch->seek(current_tick);
+		channels.push_back(std::move(ch));
+	}
+
 	this->ticks = current_tick;
 }
 
