@@ -93,6 +93,26 @@ void MD_Channel::seek(int ticks)
 	note_pitch += get_var(Event::DETUNE);
 }
 
+void MD_Channel::hot_relink(Song& new_song, Track& new_track, uint32_t current_tick)
+{
+	rebind(new_song, new_track);
+	// Macro tracks hold their own Track& into the previous song; drop them
+	// and let the next platform-event-driven trigger rebuild them.
+	macro_track = nullptr;
+	macro_carry = false;
+	if(current_tick)
+		skip_ticks(current_tick);
+}
+
+void MD_Channel::silence()
+{
+	if(is_enabled())
+	{
+		v_key_off();
+		disable();
+	}
+}
+
 //! Write a single FM operator
 uint8_t MD_Channel::write_fm_operator(int idx, int bank, int id, const std::vector<uint8_t>& idata)
 {
@@ -1366,6 +1386,41 @@ void MD_Driver::skip_ticks(unsigned int ticks)
 		if(ch->is_enabled() && ticks)
 			ch->seek(ticks);
 	}
+}
+
+//! Hot-swap the running song with a newly compiled one.
+/*!
+ *  Replaces the Song reference, rebuilds the instrument bank, and
+ *  rebinds each existing channel to the same-id track in the new
+ *  song, fast-forwarding silently to \p current_tick.
+ *  Player::skip_ticks() sets skip_flag so write_event() is suppressed;
+ *  chip state and per-channel derived state are left intact, so notes
+ *  currently sounding continue uninterrupted.
+ *
+ *  Channels whose track id no longer exists in the new song are
+ *  silenced. Tracks that only exist in the new song are not promoted
+ *  to fresh channels — that would emit chip init writes and click.
+ *  Master timeline state (ticks, tempo, sequencer/pcm counters) is
+ *  preserved so play_step() continues from the same instant.
+ */
+void MD_Driver::relink_song(Song& new_song, uint32_t current_tick)
+{
+	song = &new_song;
+	data.read_song(new_song);
+
+	const auto& track_map = new_song.get_track_map();
+	for(auto& ch_ptr : channels)
+	{
+		MD_Channel* ch = ch_ptr.get();
+		auto it = track_map.find(ch->get_track_id());
+		if(it == track_map.end())
+		{
+			ch->silence();
+			continue;
+		}
+		ch->hot_relink(new_song, new_song.get_track(ch->get_track_id()), current_tick);
+	}
+	this->ticks = current_tick;
 }
 
 //! Return true if driver is currently playing a song, false otherwise.

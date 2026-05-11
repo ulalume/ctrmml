@@ -22,6 +22,14 @@ class MD_Channel : public Player
 		MD_Channel(MD_Driver& driver, int id);
 		void update(int seq_ticks);
 		void seek(int ticks);
+		int get_track_id() const { return channel_id; }
+		//! Rebind this channel to a track in a freshly compiled song and
+		//! silently fast-forward to \p current_tick. Chip state and
+		//! channel-derived state (track_state, last_note, etc.) are
+		//! preserved so currently-sounding notes continue uninterrupted.
+		void hot_relink(Song& new_song, Track& new_track, uint32_t current_tick);
+		//! Silence the channel and stop iterating events.
+		void silence();
 
 	protected:
 		enum
@@ -287,6 +295,7 @@ class MD_Driver : public Driver
 		int get_loop_count();
 		double play_step();
 		uint32_t get_player_ticks();
+		void relink_song(Song& new_song, uint32_t current_tick) override;
 
 	private:
 		uint8_t bpm_to_delta(uint16_t bpm);
