@@ -40,6 +40,12 @@ class Driver
 		virtual uint32_t get_player_ticks() = 0;
 		//! Get the number of times the song has looped.
 		virtual int get_loop_count() = 0;
+		//! Replace the running song with a freshly compiled one,
+		//! preserving live channel/chip state. Each track that exists in
+		//! both songs has its channel fast-forwarded silently to
+		//! \p current_tick; channels for vanished tracks are silenced.
+		//! Default implementation throws — concrete drivers opt in.
+		virtual void relink_song(Song& new_song, uint32_t current_tick);
 
 		unsigned int get_rate();
 

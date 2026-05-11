@@ -1,6 +1,8 @@
 #include "driver.h"
 #include "vgm.h"
 
+#include <stdexcept>
+
 #define DEBUG_FM(fmt,...) { }
 #define DEBUG_PSG(fmt,...) { }
 //#define DEBUG_FM(fmt,...) { printf(fmt, __VA_ARGS__); }
@@ -16,6 +18,11 @@ Driver::Driver(unsigned int rate, VGM_Interface* vgm)
 unsigned int Driver::get_rate()
 {
 	return rate;
+}
+
+void Driver::relink_song(Song& /*new_song*/, uint32_t /*current_tick*/)
+{
+	throw std::runtime_error("Driver::relink_song not implemented for this driver");
 }
 
 void Driver::write(uint8_t command, uint16_t port, uint16_t reg, uint16_t data)
