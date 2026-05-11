@@ -30,6 +30,11 @@ class MD_Channel : public Player
 		void hot_relink(Song& new_song, Track& new_track, uint32_t current_tick);
 		//! Silence the channel and stop iterating events.
 		void silence();
+		//! If a seek landed inside a NOTE event's on_time, trigger the
+		//! note now so a freshly-added channel becomes audible
+		//! immediately instead of waiting up to a full note duration
+		//! for the next NOTE event boundary.
+		void trigger_current_note_if_active();
 
 	protected:
 		enum

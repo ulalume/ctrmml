@@ -125,6 +125,28 @@ void MD_Channel::silence()
 	}
 }
 
+void MD_Channel::trigger_current_note_if_active()
+{
+	// Only meaningful immediately after a seek on a freshly-constructed
+	// channel: if the seek landed mid-note (on_time still positive), the
+	// chip would otherwise stay silent until the next NOTE event arrives
+	// — up to one note length away. Force the chip into the seeked-to
+	// note's state so a track newly added by a live edit becomes audible
+	// at once.
+	if(!is_enabled() || on_time == 0)
+		return;
+	if(get_update_flag(Event::INS))
+		set_ins();
+	else if(get_update_flag(Event::VOL_FINE))
+		set_vol();
+	pitch = note_pitch;
+	porta_value = note_pitch;
+	last_pitch = 0xffff;
+	set_pitch();
+	last_pitch = pitch;
+	v_key_on();
+}
+
 //! Write a single FM operator
 uint8_t MD_Channel::write_fm_operator(int idx, int bank, int id, const std::vector<uint8_t>& idata)
 {
@@ -1455,7 +1477,9 @@ void MD_Driver::relink_song(Song& new_song, uint32_t current_tick)
 	// Tracks newly introduced by this compile get a fresh channel and
 	// are fast-forwarded to the current tick. Construction writes init
 	// state (TL=max, key-off) to the channel's chip slot which is
-	// already silent, so no audible artifact.
+	// already silent, so no audible artifact. If the seek lands inside
+	// a note, key-on now so the track is audible immediately rather
+	// than after waiting for the next event boundary.
 	for(auto it = track_map.begin(); it != track_map.end(); it++)
 	{
 		int id = it->first;
@@ -1465,7 +1489,10 @@ void MD_Driver::relink_song(Song& new_song, uint32_t current_tick)
 		if(!ch)
 			continue;
 		if(current_tick)
+		{
 			ch->seek(current_tick);
+			ch->trigger_current_note_if_active();
+		}
 		channels.push_back(std::move(ch));
 	}
 
