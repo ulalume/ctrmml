@@ -102,13 +102,35 @@ void MD_Channel::hot_relink(Song& new_song, Track& new_track, uint32_t current_t
 	macro_track = nullptr;
 	macro_carry = false;
 
-	// Snapshot platform_state so we can detect which entries the new
-	// track actually changes during the fast-forward replay. Unchanged
-	// entries are already applied to the chip by the previous playback
-	// and don't need re-flushing.
+	// Platform-state entries (PSG noise mode, FM3 mask, LFO, ...) have
+	// no natural flush path: write_event() only calls update_state() on
+	// Event::PLATFORM, and skip_ticks suppresses those writes during
+	// the fast-forward. A user edit before the current tick would
+	// otherwise never reach the chip.
+	//
+	// Snapshot the current platform_state (== last value applied to the
+	// chip), then reset the flag-driven entries whose default is 0 so a
+	// removed command falls back to "no event = default" instead of
+	// being stuck at the old value. skip_ticks replays the new track:
+	// commands that still exist re-populate platform_state via
+	// parse_platform_event; commands the user deleted stay at 0. The
+	// post-skip diff then force-flushes any entry whose value differs
+	// from the snapshot.
+	//
+	// EVENT_WRITE_* / EVENT_TL_MODIFY are excluded from the reset:
+	// their "default" is the instrument's original TL, not 0, and
+	// recovering that on deletion would require re-loading the
+	// instrument. Value changes to those still flush correctly via the
+	// diff; deletions remain a known limitation.
 	int16_t prev_platform_state[Event::CHANNEL_CMD_COUNT];
 	for(unsigned i = 0; i < Event::CHANNEL_CMD_COUNT; i++)
 		prev_platform_state[i] = get_platform_var(i);
+
+	set_platform_var(EVENT_CHANNEL_MODE, 0);
+	set_platform_var(EVENT_LFO, 0);
+	set_platform_var(EVENT_LFO_DELAY, 0);
+	set_platform_var(EVENT_LFO_CONFIG, 0);
+	set_platform_var(EVENT_FM3, 0);
 
 	if(current_tick)
 		skip_ticks(current_tick);
@@ -124,28 +146,20 @@ void MD_Channel::hot_relink(Song& new_song, Track& new_track, uint32_t current_t
 		clear_update_flag(Event::TEMPO);
 	}
 
-	// Platform-state entries (PSG noise mode, FM3 mask, LFO, register
-	// overrides, ...) have no natural flush path: write_event() only
-	// calls update_state() on Event::PLATFORM, and skip_ticks suppresses
-	// those writes during the fast-forward. As a result, a user edit to
-	// one of these commands sitting before the current tick would never
-	// reach the chip.
-	//
-	// The new track's fast-forward may have re-fired platform events
-	// with unchanged values; for those the chip already holds the right
-	// value, so clear the update flag to avoid a redundant write (and
-	// potential audible click). Entries whose value differs from the
-	// pre-relink snapshot are user edits that need to reach the chip —
-	// leave their flags set and let update_state() flush them.
 	bool any_flushable = false;
 	for(unsigned i = 0; i < Event::CHANNEL_CMD_COUNT; i++)
 	{
-		if(!get_platform_flag(i))
-			continue;
-		if(get_platform_var(i) == prev_platform_state[i])
-			clear_platform_flag(i);
-		else
+		if(get_platform_var(i) != prev_platform_state[i])
+		{
+			set_platform_flag(i);
 			any_flushable = true;
+		}
+		else if(get_platform_flag(i))
+		{
+			// event re-fired during skip with the same value; chip
+			// already holds it, skip the redundant write
+			clear_platform_flag(i);
+		}
 	}
 	if(any_flushable)
 		update_state();

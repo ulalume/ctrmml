@@ -180,7 +180,9 @@ class Player : public Basic_Player
 
 	protected:
 		bool get_platform_flag(unsigned int type) const;
+		void set_platform_flag(unsigned int type);
 		void clear_platform_flag(unsigned int type);
+		void set_platform_var(unsigned int type, int16_t value);
 		bool get_update_flag(Event::Type type) const;
 		void set_update_flag(Event::Type type);
 		void clear_update_flag(Event::Type type);

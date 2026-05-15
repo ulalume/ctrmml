@@ -640,6 +640,17 @@ bool Player::get_platform_flag(unsigned int type) const
 	return (platform_update_mask >> type) & 1;
 }
 
+//! Set the update flag for a platform variable
+/*!
+ *  \param[in] type Specify the variable to flag.
+ */
+void Player::set_platform_flag(unsigned int type)
+{
+	if(type > 31)
+		return;
+	platform_update_mask |= (1u << type);
+}
+
 //! Clear the update flag for a platform variable
 /*!
  *  \param[in] type Specify the variable to clear.
@@ -649,6 +660,21 @@ void Player::clear_platform_flag(unsigned int type)
 	if(type > 31)
 		return;
 	platform_update_mask &= ~(1 << type);
+}
+
+//! Set the value of a platform variable.
+/*!
+ *  Does not set the update flag — pair with set_platform_flag() if the
+ *  write should be picked up by the next update_state() pass.
+ *
+ *  \param[in] type  Index into platform_state[].
+ *  \param[in] value New value to store.
+ */
+void Player::set_platform_var(unsigned int type, int16_t value)
+{
+	if(type >= Event::CHANNEL_CMD_COUNT)
+		return;
+	platform_state[type] = value;
 }
 
 //! Check if a channel variable has been updated.
