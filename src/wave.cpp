@@ -363,6 +363,17 @@ unsigned int Wave_Bank::add_sample(Wave_Bank::Sample header, const std::vector<u
 			return samples.size() - 1;
 		}
 	}
+	else if(header.start && header.size)
+	{
+		// Store only the data from the start offset. Loop points keep
+		// pointing at the same data, but not before the new start.
+		auto begin = sample.begin() + header.start;
+		std::vector<uint8_t> data(begin, begin + header.size);
+		header.loop_start -= std::min(header.loop_start, header.start);
+		header.loop_end -= std::min(header.loop_end, header.start);
+		header.start = 0;
+		return add_sample(header, data);
+	}
 	else
 	{
 		// Create a new entry.
