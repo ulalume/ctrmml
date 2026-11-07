@@ -93,6 +93,7 @@ class Wave_Bank
 		// Methods to get wave ROM memory
 		const std::vector<Sample>& get_sample_headers();
 		const std::vector<uint8_t>& get_rom_data();
+		unsigned int get_max_size();
 		unsigned int get_free_bytes();
 		unsigned int get_total_gap();
 		unsigned int get_largest_gap();
@@ -112,6 +113,8 @@ class Wave_Bank
 		virtual std::vector<uint8_t> encode_sample(const std::string& encoding_type, const std::vector<int16_t>& input);
 		virtual uint32_t fit_sample(const Sample& header, uint32_t start, uint32_t end) const;
 		virtual int find_duplicate(const Sample& header, const std::vector<uint8_t>& sample) const;
+		bool rom_data_equals(uint32_t position, const std::vector<uint8_t>& sample) const;
+		void grow_rom_data();
 
 		unsigned long max_size;
 		unsigned long current_size;

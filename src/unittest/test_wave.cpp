@@ -17,6 +17,7 @@ class Wave_Bank_Test : public CppUnit::TestFixture
 	CPPUNIT_TEST(test_offset_sample_added_again);
 	CPPUNIT_TEST(test_offset_sample_loop_points);
 	CPPUNIT_TEST(test_linker_offset_samples);
+	CPPUNIT_TEST(test_rom_data_end);
 	CPPUNIT_TEST_SUITE_END();
 private:
 	static std::vector<uint8_t> make_data(uint8_t first, unsigned int size)
@@ -44,7 +45,7 @@ private:
 
 	static uint32_t used_bytes(Wave_Bank& bank)
 	{
-		return bank.get_rom_data().size() - bank.get_free_bytes();
+		return bank.get_rom_data().size();
 	}
 
 	static Wave_Bank::Encoded_Sample make_sample(const std::vector<uint8_t>& data)
@@ -118,6 +119,26 @@ public:
 			CPPUNIT_ASSERT_EQUAL((uint8_t)0x16, bank.get_rom_data().at(header.position + header.loop_start));
 			CPPUNIT_ASSERT_EQUAL(header.start + header.size, header.loop_end);
 		}
+	}
+
+	// The ROM data ends with the last sample, and reads as zero after it.
+	void test_rom_data_end()
+	{
+		Wave_Bank bank(0x100);
+		auto data = make_data(0x10, 8);
+		unsigned int id = bank.add_sample(make_header(8, 0), data);
+		CPPUNIT_ASSERT_EQUAL((size_t)8, bank.get_rom_data().size());
+		CPPUNIT_ASSERT_EQUAL(0x100u, bank.get_max_size());
+
+		auto padded = data;
+		padded.resize(12, 0);
+		unsigned int padded_id = bank.add_sample(make_header(12, 0), padded);
+		CPPUNIT_ASSERT(id != padded_id);
+		CPPUNIT_ASSERT_EQUAL(bank.get_sample_headers().at(id).position, bank.get_sample_headers().at(padded_id).position);
+		CPPUNIT_ASSERT_EQUAL((size_t)8, bank.get_rom_data().size());
+
+		bank.add_sample(make_header(4, 0), make_data(0xa0, 4));
+		CPPUNIT_ASSERT_EQUAL((size_t)12, bank.get_rom_data().size());
 	}
 
 	// Samples linked from an .MDS play the same bytes as in the song.

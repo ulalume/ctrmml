@@ -211,7 +211,6 @@ Wave_Bank::Wave_Bank(unsigned long max_size, unsigned long bank_size)
 	, rom_data()
 	, gaps()
 {
-	rom_data.resize(max_size, 0);
 	if(!bank_size)
 		this->bank_size = max_size;
 }
@@ -407,6 +406,7 @@ unsigned int Wave_Bank::add_sample(Wave_Bank::Sample header, const std::vector<u
 		if(start_pos >= current_size)
 		{
 			current_size = start_pos + header.size;
+			grow_rom_data();
 		}
 
 		std::copy_n(sample.begin(), header.size, rom_data.begin() + start_pos);
@@ -423,15 +423,33 @@ const std::vector<Wave_Bank::Sample>& Wave_Bank::get_sample_headers()
 }
 
 //! Get the sample ROM data
+/*!
+ *  The data ends with the last sample. The rest of the ROM, up to
+ *  get_max_size(), is zero.
+ */
 const std::vector<uint8_t>& Wave_Bank::get_rom_data()
 {
 	return rom_data;
+}
+
+//! Get the size of the ROM.
+unsigned int Wave_Bank::get_max_size()
+{
+	return max_size;
 }
 
 //! Get the number of unused allocated bytes in the Wave_Bank.
 unsigned int Wave_Bank::get_free_bytes()
 {
 	return max_size - current_size;
+}
+
+//! Extend the ROM data with zeros up to the end of the last sample.
+void Wave_Bank::grow_rom_data()
+{
+	if(rom_data.capacity() < current_size)
+		rom_data.reserve(std::min(std::max(current_size, (unsigned long)rom_data.capacity() * 2), max_size));
+	rom_data.resize(current_size);
 }
 
 //! Get the total size of alignment gaps.
@@ -552,13 +570,21 @@ int Wave_Bank::find_duplicate(const Wave_Bank::Sample& header, const std::vector
 	{
 		// The reason for the loop start check is that some sound chips (like C352)
 		// require that the looping part of the sample fit in the same bank.
-		if(   i.position + sample.size() <= rom_data.size()
+		if(   i.position + sample.size() <= max_size
 		   && i.loop_start <= header.loop_start
-		   && !memcmp(&sample[0], &rom_data[i.position], sample.size()))
+		   && rom_data_equals(i.position, sample))
 			return id;
 		id++;
 	}
 	return -1;
+}
+
+//! Compare ROM data at a position with a sample, up to the size of the ROM.
+bool Wave_Bank::rom_data_equals(uint32_t position, const std::vector<uint8_t>& sample) const
+{
+	size_t stored = std::min(sample.size(), rom_data.size() - position);
+	return !memcmp(sample.data(), rom_data.data() + position, stored)
+		&& std::all_of(sample.begin() + stored, sample.end(), [](uint8_t value) { return value == 0; });
 }
 
 //=====================================================================

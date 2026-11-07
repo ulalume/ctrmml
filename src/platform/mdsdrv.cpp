@@ -1009,9 +1009,7 @@ RIFF MDSDRV_Converter::get_mds()
 			dblk.add_chunk(RIFF(FOURCC("pcmh"), d));
 	}
 	riff.add_chunk(dblk);
-	std::vector<uint8_t> d(data.wave_rom.get_rom_data().begin(),
-			data.wave_rom.get_rom_data().end() - data.wave_rom.get_free_bytes());
-	riff.add_chunk(RIFF(FOURCC("pcmd"), d));
+	riff.add_chunk(RIFF(FOURCC("pcmd"), data.wave_rom.get_rom_data()));
 	return riff;
 }
 
@@ -1686,8 +1684,7 @@ std::vector<uint8_t> MDSDRV_Linker::get_seq_data()
 //! Get the output mdspcm.bin
 std::vector<uint8_t> MDSDRV_Linker::get_pcm_data()
 {
-	auto wave = wave_rom.get_rom_data();
-	return std::vector<uint8_t>(wave.begin(), wave.end() - wave_rom.get_free_bytes());
+	return wave_rom.get_rom_data();
 }
 
 //! Get linker statistics
@@ -1695,8 +1692,8 @@ std::string MDSDRV_Linker::get_statistics()
 {
 	auto str = std::string();
 	str += stringf("PCM data size: %d bytes (max %d)\n",
-		wave_rom.get_rom_data().size() - wave_rom.get_free_bytes(),
-		wave_rom.get_rom_data().size());
+		wave_rom.get_rom_data().size(),
+		wave_rom.get_max_size());
 	str += stringf("Gaps: %d bytes, largest %d\n",
 		wave_rom.get_total_gap(), wave_rom.get_largest_gap());
 	return str;
