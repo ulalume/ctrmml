@@ -14,8 +14,10 @@
 Song::Song()
 	: tag_map()
 	, track_map()
+	, file_map()
 	, ppqn(24)
 	, platform_command_index(-32768)
+	, platform_key("megadrive")
 {
 	platform = new MDSDRV_Platform(0);
 }
@@ -29,6 +31,12 @@ Song::~Song()
 
 //! Get a reference to the tag map.
 Tag_Map& Song::get_tag_map()
+{
+	return tag_map;
+}
+
+//! Get a reference to the tag map.
+const Tag_Map& Song::get_tag_map() const
 {
 	return tag_map;
 }
@@ -263,6 +271,12 @@ Track_Map& Song::get_track_map()
 	return track_map;
 }
 
+//! Get a reference to the track map.
+const Track_Map& Song::get_track_map() const
+{
+	return track_map;
+}
+
 //! Get a reference to the track with the specified id.
 /*!
  * \exception std::out_of_range if not found. Use make_track() to create track if needed.
@@ -302,6 +316,12 @@ const Platform* Song::get_platform() const
 	return platform;
 }
 
+//! Gets the key of the platform, as passed to set_platform().
+const std::string& Song::get_platform_key() const
+{
+	return platform_key;
+}
+
 //! Sets the platform
 /*!
  *  \return 1 on failure
@@ -313,14 +333,28 @@ bool Song::set_platform(const std::string& key)
 	{
 		delete platform;
 		platform = new MDSDRV_Platform(0);
+		platform_key = "megadrive";
 	}
 	else if(iequal(key, "mdsdrv"))
 	{
 		delete platform;
 		platform = new MDSDRV_Platform(2);
+		platform_key = "mdsdrv";
 	}
 	//type = key;
 	return 0;
+}
+
+//! Get a reference to the file map.
+File_Map& Song::get_file_map()
+{
+	return file_map;
+}
+
+//! Get a reference to the file map.
+const File_Map& Song::get_file_map() const
+{
+	return file_map;
 }
 
 std::shared_ptr<Driver> Platform::get_driver(unsigned int rate, VGM_Interface* vgm_interface) const

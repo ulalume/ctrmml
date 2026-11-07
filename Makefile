@@ -33,6 +33,7 @@ endif
 CORE_OBJS = \
 	$(OBJ)/track.o \
 	$(OBJ)/song.o \
+	$(OBJ)/song_blob.o \
 	$(OBJ)/input.o \
 	$(OBJ)/mml_input.o \
 	$(OBJ)/player.o \
@@ -58,6 +59,7 @@ UNITTEST_OBJS = \
 	$(CORE_OBJS) \
 	$(OBJ)/unittest/test_track.o \
 	$(OBJ)/unittest/test_song.o \
+	$(OBJ)/unittest/test_song_blob.o \
 	$(OBJ)/unittest/test_input.o \
 	$(OBJ)/unittest/test_mml_input.o \
 	$(OBJ)/unittest/test_player.o \
@@ -65,6 +67,7 @@ UNITTEST_OBJS = \
 	$(OBJ)/unittest/test_riff.o \
 	$(OBJ)/unittest/test_conf.o \
 	$(OBJ)/unittest/test_mdsdrv.o \
+	$(OBJ)/unittest/test_md_driver.o \
 	$(OBJ)/unittest/test_misc.o \
 	$(OBJ)/unittest/main.o
 

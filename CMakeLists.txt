@@ -9,6 +9,7 @@ pkg_check_modules(CPPUNIT cppunit)
 add_library(ctrmml
 	src/track.cpp
 	src/song.cpp
+	src/song_blob.cpp
 	src/input.cpp
 	src/mml_input.cpp
 	src/player.cpp
@@ -33,6 +34,7 @@ if(CPPUNIT_FOUND)
 	add_executable(ctrmml_unittest
 		src/unittest/test_track.cpp
 		src/unittest/test_song.cpp
+		src/unittest/test_song_blob.cpp
 		src/unittest/test_input.cpp
 		src/unittest/test_mml_input.cpp
 		src/unittest/test_player.cpp
@@ -40,6 +42,7 @@ if(CPPUNIT_FOUND)
 		src/unittest/test_riff.cpp
 		src/unittest/test_conf.cpp
 		src/unittest/test_mdsdrv.cpp
+		src/unittest/test_md_driver.cpp
 		src/unittest/test_misc.cpp
 		src/unittest/main.cpp)
 	target_link_libraries(ctrmml_unittest ctrmml)

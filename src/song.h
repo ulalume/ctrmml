@@ -19,6 +19,9 @@
  *
  * The 'cmd_' prefix is special and used for platform-specific events. Use the register_platform_command() and
  * get_platform_command() to set and retrieve these tags.
+ *
+ * The file map holds the contents of files referenced by the song, such as PCM samples, keyed by the file name
+ * used in the song. Files in the map are used instead of reading them from the include paths.
  */
 class Song
 {
@@ -27,6 +30,7 @@ class Song
 		virtual ~Song();
 
 		Tag_Map& get_tag_map();
+		const Tag_Map& get_tag_map() const;
 		void add_tag(const std::string& key, std::string value);
 		void add_tag_list(const std::string &key, const std::string &value);
 		void set_tag(const std::string& key, std::string value);
@@ -44,19 +48,26 @@ class Song
 		Track& make_track(uint16_t id);
 
 		Track_Map& get_track_map();
+		const Track_Map& get_track_map() const;
 
 		uint16_t get_ppqn() const;
 		void set_ppqn(uint16_t new_ppqn);
 
 		bool set_platform(const std::string& key);
+		const std::string& get_platform_key() const;
 		const Platform* get_platform() const;
+
+		File_Map& get_file_map();
+		const File_Map& get_file_map() const;
 
 	private:
 		Tag_Map tag_map;
 		Track_Map track_map;
+		File_Map file_map;
 		uint16_t ppqn;
 		int16_t platform_command_index;
 
+		std::string platform_key;
 		Platform* platform;
 };
 

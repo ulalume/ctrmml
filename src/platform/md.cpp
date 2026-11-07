@@ -340,7 +340,6 @@ uint32_t MD_Channel::parse_platform_event(const Tag& tag, int16_t* platform_stat
 		driver->pcm_rate = driver->pcm.set_mode(data);
 		driver->pcm_counter = 0;
 		driver->pcm_delta = driver->get_rate()/driver->pcm_rate;
-		printf("set rate to %f", driver->pcm_delta);
 	}
 	else if(iequal(tag[0], "carry"))
 	{
@@ -430,15 +429,9 @@ void MD_Channel::update_tempo()
 {
 	clear_update_flag(Event::TEMPO);
 	if(bpm_flag())
-	{
 		driver->tempo_delta = driver->bpm_to_delta(get_var(Event::TEMPO));
-		printf("set tempo to %02x (%d bpm)\n", driver->tempo_delta, get_var(Event::TEMPO));
-	}
 	else
-	{
 		driver->tempo_delta = get_var(Event::TEMPO);
-		printf("set tempo to %02x (direct)\n", driver->tempo_delta);
-	}
 }
 
 void MD_Channel::update_state()
@@ -1470,11 +1463,7 @@ void MD_Driver::play_song(Song& song)
 	//std::cout << data.message;
 	if(vgm && !pcm_mode)
 	{
-		const std::vector<uint8_t>& dbdata = data.wave_rom.get_rom_data();
-		vgm->datablock(0x00,
-			dbdata.size() - data.wave_rom.get_free_bytes(),
-			dbdata.data(),
-			dbdata.size());
+		write_wave_rom();
 		vgm->dac_setup(0x00, 0x02, 0x00, 0x2a, 0x00);
 	}
 	// setup tempo
@@ -1490,6 +1479,16 @@ void MD_Driver::play_song(Song& song)
 		if(ch)
 			channels.push_back(std::move(ch));
 	}
+}
+
+//! Send the wave ROM as the DAC stream data block.
+void MD_Driver::write_wave_rom()
+{
+	const std::vector<uint8_t>& dbdata = data.wave_rom.get_rom_data();
+	vgm->datablock(0x00,
+		dbdata.size() - data.wave_rom.get_free_bytes(),
+		dbdata.data(),
+		dbdata.size());
 }
 
 //! Reset sound chips, etc.
@@ -1530,11 +1529,14 @@ void MD_Driver::skip_ticks(unsigned int ticks)
 void MD_Driver::relink_song(Song& new_song, uint32_t current_tick)
 {
 	song = &new_song;
+	unsigned int sample_count = data.wave_rom.get_sample_headers().size();
 	data.read_song(new_song);
 
-	// read_song rebuilt the wave bank; any PCM channel still sounding holds a
-	// start/position into the OLD bank layout. Stop them so the next render
-	// can't read stale (or out-of-range) sample data.
+	// read_song appends new samples to the wave ROM. Send it again so DAC
+	// streams can play them.
+	if(vgm && !pcm_mode && data.wave_rom.get_sample_headers().size() != sample_count)
+		write_wave_rom();
+
 	pcm.silence_all();
 
 	const auto& track_map = new_song.get_track_map();
