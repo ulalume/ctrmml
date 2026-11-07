@@ -1,5 +1,3 @@
-#include <fstream>
-#include <iterator>
 #include <stdexcept>
 #include <cppunit/extensions/HelperMacros.h>
 #include "../song_blob.h"
@@ -7,6 +5,7 @@
 #include "../input.h"
 #include "../song.h"
 #include "../track.h"
+#include "../wave.h"
 
 class Song_Blob_Test : public CppUnit::TestFixture
 {
@@ -14,7 +13,7 @@ class Song_Blob_Test : public CppUnit::TestFixture
 	CPPUNIT_TEST(test_tracks);
 	CPPUNIT_TEST(test_tags);
 	CPPUNIT_TEST(test_platform);
-	CPPUNIT_TEST(test_sample_files);
+	CPPUNIT_TEST(test_samples);
 	CPPUNIT_TEST(test_reserialize);
 	CPPUNIT_TEST(test_vgm_output);
 	CPPUNIT_TEST(test_missing_sample);
@@ -31,10 +30,12 @@ private:
 		deserialize_song(blob.data(), blob.size(), *copy);
 	}
 
-	static std::vector<uint8_t> read_file(const std::string& filename)
+	static Wave_Bank::Encoded_Sample read_sample(const std::string& filename)
 	{
-		std::ifstream is(filename, std::ios::binary);
-		return std::vector<uint8_t>(std::istreambuf_iterator<char>(is), std::istreambuf_iterator<char>());
+		Wave_Bank bank(0);
+		bank.set_include_paths({"sample/"});
+		Wave_Bank::Encoded_Sample buffer;
+		return bank.get_encoded_sample(filename, buffer);
 	}
 
 	// VGM output without the GD3 tag, which holds metadata that is not serialized.
@@ -110,14 +111,19 @@ public:
 		round_trip();
 		CPPUNIT_ASSERT_EQUAL(std::string("megadrive"), copy->get_platform_key());
 	}
-	void test_sample_files()
+	void test_samples()
 	{
 		mml_input->open_file("sample/idk.mml");
 		round_trip();
-		const File_Map& files = copy->get_file_map();
-		CPPUNIT_ASSERT_EQUAL((size_t)4, files.size());
-		CPPUNIT_ASSERT(files.at("pcm/bd_17k5.wav") == read_file("sample/pcm/bd_17k5.wav"));
-		CPPUNIT_ASSERT(files.at("pcm/tom2l_17k5.wav") == read_file("sample/pcm/tom2l_17k5.wav"));
+		const Wave_Bank::Encoded_Sample_Map& samples = copy->get_sample_map();
+		CPPUNIT_ASSERT_EQUAL((size_t)4, samples.size());
+		for(auto&& name : {"pcm/bd_17k5.wav", "pcm/tom2l_17k5.wav"})
+		{
+			Wave_Bank::Encoded_Sample expected = read_sample(name);
+			const Wave_Bank::Encoded_Sample& actual = samples.at(name);
+			CPPUNIT_ASSERT(expected.header.to_bytes() == actual.header.to_bytes());
+			CPPUNIT_ASSERT(expected.data == actual.data);
+		}
 	}
 	void test_reserialize()
 	{
@@ -138,7 +144,7 @@ public:
 		mml_input->read_line("A @30 c");
 		song->add_tag("include_path", "sample/");
 		round_trip();
-		CPPUNIT_ASSERT_EQUAL((size_t)0, copy->get_file_map().size());
+		CPPUNIT_ASSERT_EQUAL((size_t)0, copy->get_sample_map().size());
 		CPPUNIT_ASSERT_THROW(copy->get_platform()->get_export_data(*copy, 0), InputError);
 	}
 	void test_invalid_data()

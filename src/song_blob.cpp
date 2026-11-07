@@ -8,7 +8,7 @@
  *  that many bytes.
  *
  *      char[4]  magic "CSNG"
- *      u32      version (1)
+ *      u32      version (2)
  *      string   platform key, see Song::set_platform()
  *      u16      ppqn
  *      u32      tag count, then for each tag:
@@ -16,20 +16,25 @@
  *      u32      track count, then for each track:
  *                   u16 id, u32 event count, then for each event:
  *                       u8 type, s16 param, u16 on_time, u16 off_time
- *      u32      file count, then for each file:
- *                   string name, u32 size, data
+ *      u32      sample count, then for each sample:
+ *                   string file name
+ *                   u32[8] Wave_Bank::Sample header, as Sample::to_bytes()
+ *                   u32 size, data
  *
  *  Tags are limited to those read by the driver: instruments and envelopes
  *  ('@' prefix), platform commands ('cmd_' prefix), "#option" and the tag
- *  order list. The include paths are replaced by the files that the PCM
- *  instruments read, so a deserialized song does not read any files.
- *  Input references are not stored.
+ *  order list. The include paths are replaced by the samples of the PCM
+ *  instruments, encoded as Wave_Bank::get_encoded_sample() returns them, so
+ *  a deserialized song does not read any files. Input references are not
+ *  stored.
  */
 #include <climits>
 #include <cstdio>
 #include <cstring>
+#include <deque>
 #include <stdexcept>
 #include "song_blob.h"
+#include "input.h"
 #include "song.h"
 #include "track.h"
 #include "wave.h"
@@ -39,7 +44,8 @@ namespace
 {
 
 const char magic[4] = {'C', 'S', 'N', 'G'};
-const uint32_t version = 1;
+const uint32_t version = 2;
+const size_t sample_header_size = 32;
 
 bool is_driver_tag(const std::string& key)
 {
@@ -48,31 +54,39 @@ bool is_driver_tag(const std::string& key)
 		|| key == "#option";
 }
 
-//! Add the sample files read by the PCM instruments of a song.
+//! Add the samples read by the PCM instruments of a song.
 /*!
- *  The files are found the same way as MDSDRV_Data::read_song() does.
- *  Files that cannot be found are left out.
+ *  The samples are found the same way as MDSDRV_Data::read_song() does.
+ *  Samples that cannot be read are left out.
+ *
+ *  \param buffers Holds the samples read from files.
  */
-void add_sample_files(const Song& song, File_Map& files)
+void add_samples(const Song& song, std::map<std::string, const Wave_Bank::Encoded_Sample*>& samples,
+	std::deque<Wave_Bank::Encoded_Sample>& buffers)
 {
 	const Tag_Map& tags = song.get_tag_map();
-	Tag include_paths = {""};
-	if(tags.count("include_path"))
-		include_paths = tags.at("include_path");
 	if(!tags.count("tag_order"))
 		return;
+	Wave_Bank bank(0);
+	if(tags.count("include_path"))
+		bank.set_include_paths(tags.at("include_path"));
+	bank.set_encoded_samples(&song.get_sample_map());
 	for(auto&& key : tags.at("tag_order"))
 	{
 		uint16_t id;
 		if(std::sscanf(key.c_str(), "@%hu", &id) != 1 || !tags.count(key))
 			continue;
 		const Tag& tag = tags.at(key);
-		if(tag.size() < 2 || !iequal(tag[0], "pcm") || files.count(tag[1]))
+		if(tag.size() < 2 || !iequal(tag[0], "pcm") || samples.count(tag[1]))
 			continue;
-		Wave_File wave;
-		std::vector<uint8_t> contents;
-		if(Wave_Bank::read_sample_file(tag[1], &song.get_file_map(), include_paths, wave, &contents) == 0)
-			files[tag[1]] = std::move(contents);
+		try
+		{
+			buffers.emplace_back();
+			samples[tag[1]] = &bank.get_encoded_sample(tag[1], buffers.back());
+		}
+		catch(InputError&)
+		{
+		}
 	}
 }
 
@@ -168,8 +182,8 @@ class Reader
 
 //! Serialize a Song.
 /*!
- *  Sample files of PCM instruments are read from the song's file map or
- *  include paths and stored with the song.
+ *  Samples of PCM instruments are taken from the song's sample map or read
+ *  from its include paths, and stored with the song.
  */
 std::vector<uint8_t> serialize_song(const Song& song)
 {
@@ -222,22 +236,25 @@ std::vector<uint8_t> serialize_song(const Song& song)
 		}
 	}
 
-	File_Map files;
-	add_sample_files(song, files);
-	w.u32(files.size());
-	for(auto&& file : files)
+	std::map<std::string, const Wave_Bank::Encoded_Sample*> samples;
+	std::deque<Wave_Bank::Encoded_Sample> buffers;
+	add_samples(song, samples, buffers);
+	w.u32(samples.size());
+	for(auto&& sample : samples)
 	{
-		w.str(file.first);
-		w.u32(file.second.size());
-		w.bytes(file.second.data(), file.second.size());
+		w.str(sample.first);
+		std::vector<uint8_t> header = sample.second->header.to_bytes();
+		w.bytes(header.data(), header.size());
+		w.u32(sample.second->data.size());
+		w.bytes(sample.second->data.data(), sample.second->data.size());
 	}
 	return w.out;
 }
 
 //! Deserialize a Song.
 /*!
- *  Replaces the tags, tracks and files of \p song. The song gets an empty
- *  include path list, so samples are only read from its file map.
+ *  Replaces the tags, tracks and samples of \p song. The song gets an empty
+ *  include path list, so samples are only taken from its sample map.
  *
  *  \exception std::invalid_argument if the data is not a valid serialized song.
  */
@@ -286,15 +303,17 @@ void deserialize_song(const uint8_t* data, size_t size, Song& song)
 		}
 	}
 
-	File_Map& files = song.get_file_map();
-	files.clear();
-	uint32_t file_count = r.count(8);
-	for(uint32_t i = 0; i < file_count; i++)
+	Wave_Bank::Encoded_Sample_Map& samples = song.get_sample_map();
+	samples.clear();
+	uint32_t sample_count = r.count(4 + sample_header_size + 4);
+	for(uint32_t i = 0; i < sample_count; i++)
 	{
-		std::string name = r.str();
-		uint32_t file_size = r.u32();
-		const uint8_t* file_data = r.bytes(file_size);
-		files[name].assign(file_data, file_data + file_size);
+		Wave_Bank::Encoded_Sample& sample = samples[r.str()];
+		const uint8_t* header = r.bytes(sample_header_size);
+		sample.header.from_bytes(std::vector<uint8_t>(header, header + sample_header_size));
+		uint32_t data_size = r.u32();
+		const uint8_t* data = r.bytes(data_size);
+		sample.data.assign(data, data + data_size);
 	}
 	if(!r.at_end())
 		throw std::invalid_argument("unexpected data after serialized song");

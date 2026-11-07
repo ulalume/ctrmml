@@ -47,18 +47,9 @@ private:
 		return bank.get_rom_data().size() - bank.get_free_bytes();
 	}
 
-	// 8-bit mono WAV file.
-	static std::vector<uint8_t> make_wav(const std::vector<uint8_t>& data)
+	static Wave_Bank::Encoded_Sample make_sample(const std::vector<uint8_t>& data)
 	{
-		std::vector<uint8_t> wav = {'R','I','F','F',0,0,0,0,'W','A','V','E',
-			'f','m','t',' ',16,0,0,0, 1,0, 1,0, 0,0,0,0, 0,0,0,0, 1,0, 8,0,
-			'd','a','t','a',0,0,0,0};
-		write_le32(wav, 24, 17500);
-		write_le32(wav, 28, 17500);
-		write_le32(wav, 40, data.size());
-		wav.insert(wav.end(), data.begin(), data.end());
-		write_le32(wav, 4, wav.size() - 8);
-		return wav;
+		return {make_header(data.size(), 0), data};
 	}
 
 public:
@@ -136,8 +127,8 @@ public:
 		auto a = make_data(0x10, 16);
 		auto b = make_data(0xa0, 16);
 		Song song;
-		song.get_file_map()["a.wav"] = make_wav(a);
-		song.get_file_map()["b.wav"] = make_wav(b);
+		song.get_sample_map()["a.wav"] = make_sample(a);
+		song.get_sample_map()["b.wav"] = make_sample(b);
 		MML_Input input(&song);
 		input.read_line("@1 pcm \"a.wav\"");
 		input.read_line("@2 pcm \"a.wav\" offset=4");

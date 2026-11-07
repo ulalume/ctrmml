@@ -68,14 +68,23 @@ class Wave_Bank
 			std::vector<uint8_t> to_bytes() const;
 		};
 
+		//! A sample file converted to wave ROM data.
+		struct Encoded_Sample
+		{
+			//! Header for the whole file, before the parameters of a sample definition.
+			Sample header;
+			std::vector<uint8_t> data;
+		};
+		//! Encoded samples keyed by file name.
+		typedef std::map<std::string, Encoded_Sample> Encoded_Sample_Map;
+
 		Wave_Bank(unsigned long max_size, unsigned long bank_size = 0);
 		virtual ~Wave_Bank();
 
 		// Helper methods
 		void set_include_paths(const Tag& tag);
-		void set_files(const File_Map* files);
-		static int read_sample_file(const std::string& filename, const File_Map* files,
-			const Tag& include_paths, Wave_File& wave, std::vector<uint8_t>* contents = nullptr);
+		void set_encoded_samples(const Encoded_Sample_Map* samples);
+		const Encoded_Sample& get_encoded_sample(const std::string& filename, Encoded_Sample& buffer);
 
 		// Methods to modify wave ROM memory
 		unsigned int add_sample(const Tag& tag);
@@ -98,6 +107,7 @@ class Wave_Bank
 
 		static const uint32_t NO_FIT = (uint32_t)-1;
 
+		static int read_sample_file(const std::string& filename, const Tag& include_paths, Wave_File& wave);
 		unsigned int find_gap(const Sample& header, uint32_t& gap_start) const;
 		virtual std::vector<uint8_t> encode_sample(const std::string& encoding_type, const std::vector<int16_t>& input);
 		virtual uint32_t fit_sample(const Sample& header, uint32_t start, uint32_t end) const;
@@ -108,7 +118,7 @@ class Wave_Bank
 		unsigned long bank_size;
 
 		Tag include_paths;
-		const File_Map* files;
+		const Encoded_Sample_Map* encoded_samples;
 		std::vector<uint8_t> rom_data;
 		std::vector<Gap> gaps;
 		std::vector<Sample> samples;

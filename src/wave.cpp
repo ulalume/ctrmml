@@ -207,7 +207,7 @@ Wave_Bank::Wave_Bank(unsigned long max_size, unsigned long bank_size)
 	, current_size(0)
 	, bank_size(bank_size)
 	, include_paths{""}
-	, files(nullptr)
+	, encoded_samples(nullptr)
 	, rom_data()
 	, gaps()
 {
@@ -228,46 +228,30 @@ void Wave_Bank::set_include_paths(const Tag& tag)
 	include_paths = tag;
 }
 
-//! Set the files to use instead of reading them from the include paths.
+//! Set the encoded samples to use instead of reading their files.
 /*!
  *  The map must remain valid while samples are added from Tags.
  */
-void Wave_Bank::set_files(const File_Map* files)
+void Wave_Bank::set_encoded_samples(const Encoded_Sample_Map* samples)
 {
-	this->files = files;
+	encoded_samples = samples;
 }
 
 //! Read the file of a sample definition.
 /*!
- *  The file is taken from \p files if it holds a WAV file under
- *  \p filename, otherwise from the first include path where it can be read
- *  as a WAV file.
+ *  The file is read from the first include path where it can be read as a
+ *  WAV file.
  *
  *  \param filename  File name from the sample definition.
- *  \param files     Files to check first. May be null.
  *  \param include_paths Paths prepended to \p filename, in search order.
  *  \param wave      Receives the parsed file. If no file could be parsed,
  *                   get_error() returns the first parse error, or an empty
  *                   string if no file was found.
- *  \param contents  If not null, receives the file contents.
  *  \return 0 on success, -1 on failure.
  */
-int Wave_Bank::read_sample_file(const std::string& filename, const File_Map* files,
-	const Tag& include_paths, Wave_File& wave, std::vector<uint8_t>* contents)
+int Wave_Bank::read_sample_file(const std::string& filename, const Tag& include_paths, Wave_File& wave)
 {
 	std::string error;
-	if(files && files->count(filename))
-	{
-		const std::vector<uint8_t>& file = files->at(filename);
-		wave = Wave_File();
-		if(wave.read(file.data(), file.size()) == 0)
-		{
-			if(contents)
-				*contents = file;
-			return 0;
-		}
-		error = wave.get_error();
-	}
 	for(auto&& path : include_paths)
 	{
 		std::vector<uint8_t> file;
@@ -275,17 +259,53 @@ int Wave_Bank::read_sample_file(const std::string& filename, const File_Map* fil
 			continue;
 		wave = Wave_File();
 		if(wave.read(file.data(), file.size()) == 0)
-		{
-			if(contents)
-				*contents = std::move(file);
 			return 0;
-		}
 		if(error.empty())
 			error = wave.get_error();
 	}
 	wave = Wave_File();
 	wave.error_message = error;
 	return -1;
+}
+
+//! Get the sample of a file, encoded for the wave ROM.
+/*!
+ *  A sample set with set_encoded_samples() is used before reading the file
+ *  from the include paths.
+ *
+ *  \param filename File name from the sample definition.
+ *  \param buffer   Receives the sample if it is read from the file.
+ *  \return The encoded sample, or \p buffer.
+ *  \exception InputError if the file cannot be read.
+ */
+const Wave_Bank::Encoded_Sample& Wave_Bank::get_encoded_sample(const std::string& filename, Encoded_Sample& buffer)
+{
+	if(encoded_samples)
+	{
+		auto it = encoded_samples->find(filename);
+		if(it != encoded_samples->end())
+			return it->second;
+	}
+	Wave_File wf;
+	if(read_sample_file(filename, include_paths, wf))
+	{
+		if(wf.get_error().empty())
+			error_message = filename + " not found";
+		else
+			error_message = filename + ": " + wf.get_error();
+		throw InputError(nullptr, error_message.c_str());
+	}
+	buffer.data = encode_sample("", wf.data[0]);
+	buffer.header = {
+		0,
+		0,
+		wf.slength,
+		wf.lstart,
+		wf.lend,
+		wf.srate,
+		wf.transpose,
+		0};
+	return buffer;
 }
 
 //! Convert and add sample to the waverom.
@@ -296,28 +316,9 @@ unsigned int Wave_Bank::add_sample(const Tag& tag)
 		error_message = "Incomplete sample definition";
 		throw InputError(nullptr, error_message.c_str());
 	}
-	std::string filename = tag[0];
-	Wave_File wf;
-	if(read_sample_file(filename, files, include_paths, wf))
-	{
-		if(wf.get_error().empty())
-			error_message = filename + " not found";
-		else
-			error_message = filename + ": " + wf.get_error();
-		throw InputError(nullptr, error_message.c_str());
-	}
-
-	// convert sample
-	std::vector<uint8_t> sample = encode_sample("", wf.data[0]);
-	Wave_Bank::Sample header = {
-		0,
-		0,
-		wf.slength,
-		wf.lstart,
-		wf.lend,
-		wf.srate,
-		wf.transpose,
-		0};
+	Encoded_Sample buffer;
+	const Encoded_Sample& sample = get_encoded_sample(tag[0], buffer);
+	Wave_Bank::Sample header = sample.header;
 
 	// Allow overriding the sample rate and setting start offset
 	int i = 1;
@@ -338,7 +339,7 @@ unsigned int Wave_Bank::add_sample(const Tag& tag)
 		i++;
 	}
 
-	return add_sample(header, sample);
+	return add_sample(header, sample.data);
 };
 
 //! Add sample to the waverom in raw format.
