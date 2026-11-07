@@ -73,8 +73,9 @@ class Wave_Bank
 
 		// Helper methods
 		void set_include_paths(const Tag& tag);
-		static int read_sample_file(const std::string& filename, const Tag& include_paths,
-			Wave_File& wave, std::vector<uint8_t>* contents = nullptr);
+		void set_files(const File_Map* files);
+		static int read_sample_file(const std::string& filename, const File_Map* files,
+			const Tag& include_paths, Wave_File& wave, std::vector<uint8_t>* contents = nullptr);
 
 		// Methods to modify wave ROM memory
 		unsigned int add_sample(const Tag& tag);
@@ -107,6 +108,7 @@ class Wave_Bank
 		unsigned long bank_size;
 
 		Tag include_paths;
+		const File_Map* files;
 		std::vector<uint8_t> rom_data;
 		std::vector<Gap> gaps;
 		std::vector<Sample> samples;

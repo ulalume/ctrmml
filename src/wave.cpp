@@ -207,6 +207,7 @@ Wave_Bank::Wave_Bank(unsigned long max_size, unsigned long bank_size)
 	, current_size(0)
 	, bank_size(bank_size)
 	, include_paths{""}
+	, files(nullptr)
 	, rom_data()
 	, gaps()
 {
@@ -227,12 +228,23 @@ void Wave_Bank::set_include_paths(const Tag& tag)
 	include_paths = tag;
 }
 
+//! Set the files to use instead of reading them from the include paths.
+/*!
+ *  The map must remain valid while samples are added from Tags.
+ */
+void Wave_Bank::set_files(const File_Map* files)
+{
+	this->files = files;
+}
+
 //! Read the file of a sample definition.
 /*!
- *  The file is read from the first include path where it can be read as a
- *  WAV file.
+ *  The file is taken from \p files if it holds a WAV file under
+ *  \p filename, otherwise from the first include path where it can be read
+ *  as a WAV file.
  *
  *  \param filename  File name from the sample definition.
+ *  \param files     Files to check first. May be null.
  *  \param include_paths Paths prepended to \p filename, in search order.
  *  \param wave      Receives the parsed file. If no file could be parsed,
  *                   get_error() returns the first parse error, or an empty
@@ -240,10 +252,22 @@ void Wave_Bank::set_include_paths(const Tag& tag)
  *  \param contents  If not null, receives the file contents.
  *  \return 0 on success, -1 on failure.
  */
-int Wave_Bank::read_sample_file(const std::string& filename, const Tag& include_paths,
-	Wave_File& wave, std::vector<uint8_t>* contents)
+int Wave_Bank::read_sample_file(const std::string& filename, const File_Map* files,
+	const Tag& include_paths, Wave_File& wave, std::vector<uint8_t>* contents)
 {
 	std::string error;
+	if(files && files->count(filename))
+	{
+		const std::vector<uint8_t>& file = files->at(filename);
+		wave = Wave_File();
+		if(wave.read(file.data(), file.size()) == 0)
+		{
+			if(contents)
+				*contents = file;
+			return 0;
+		}
+		error = wave.get_error();
+	}
 	for(auto&& path : include_paths)
 	{
 		std::vector<uint8_t> file;
@@ -274,7 +298,7 @@ unsigned int Wave_Bank::add_sample(const Tag& tag)
 	}
 	std::string filename = tag[0];
 	Wave_File wf;
-	if(read_sample_file(filename, include_paths, wf))
+	if(read_sample_file(filename, files, include_paths, wf))
 	{
 		if(wf.get_error().empty())
 			error_message = filename + " not found";

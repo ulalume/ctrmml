@@ -14,6 +14,7 @@
 Song::Song()
 	: tag_map()
 	, track_map()
+	, file_map()
 	, ppqn(24)
 	, platform_command_index(-32768)
 {
@@ -321,6 +322,18 @@ bool Song::set_platform(const std::string& key)
 	}
 	//type = key;
 	return 0;
+}
+
+//! Get a reference to the file map.
+File_Map& Song::get_file_map()
+{
+	return file_map;
+}
+
+//! Get a reference to the file map.
+const File_Map& Song::get_file_map() const
+{
+	return file_map;
 }
 
 std::shared_ptr<Driver> Platform::get_driver(unsigned int rate, VGM_Interface* vgm_interface) const

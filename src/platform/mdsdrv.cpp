@@ -68,6 +68,7 @@ void MDSDRV_Data::read_song(Song& song)
 	catch(std::exception &)
 	{
 	}
+	wave_rom.set_files(&song.get_file_map());
 	// add a unique psg envelope to prevent possible errors
 	envelope_map[0] = add_unique_data({0x10, 0x01, 0x1f, 0x00});
 	ins_transpose[0] = 0;
