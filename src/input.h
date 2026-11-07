@@ -44,6 +44,7 @@ class InputRef
 {
 	public:
 		InputRef(const std::string& filename = "", const std::string& line = "", int line_no = 0, int column = 0);
+		InputRef(std::shared_ptr<const std::string> filename, const std::string& line, int line_no, int column);
 
 		const std::string& get_filename() const;
 		const unsigned int& get_line() const;
@@ -51,7 +52,7 @@ class InputRef
 		const std::string& get_line_contents() const;
 
 	private:
-		std::string filename;
+		std::shared_ptr<const std::string> filename;
 		std::string line_contents;
 		unsigned int line;
 		unsigned int column;
@@ -80,6 +81,7 @@ class Input
 	protected:
 		Song& get_song();
 		const std::string& get_filename();
+		const std::shared_ptr<const std::string>& get_shared_filename();
 		virtual std::shared_ptr<InputRef> get_reference();
 
 		void parse_error(const char* msg);
@@ -92,7 +94,7 @@ class Input
 
 	private:
 		Song* song;
-		std::string filename;
+		std::shared_ptr<const std::string> filename;
 };
 
 //! Line buffer interface

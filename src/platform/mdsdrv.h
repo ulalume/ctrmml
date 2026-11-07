@@ -82,7 +82,6 @@ class MDSDRV_Data
 		void add_pitch_vibrato(const char* s, bool extend, std::vector<uint8_t>* env_data);
 
 		int add_unique_data(const std::vector<uint8_t>& data);
-		std::string dump_data(uint16_t id, uint16_t mapped_id); // debug function
 
 		//! Allow extended pitch envelopes
 		bool use_extended_pitch;
@@ -111,7 +110,7 @@ class MDSDRV_Data
 		std::map<uint16_t, int> pitch_map;
 		//! Specify the instrument types of the defined pitch envelopes.
 		std::set<uint16_t> pitch_extend;
-		//! Diagnostic message
+		//! Warnings about the instruments and envelopes read since read_song()
 		std::string message;
 };
 

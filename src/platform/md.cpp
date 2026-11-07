@@ -1362,22 +1362,24 @@ inline int8_t MD_PCMDriver::mix_channel(int16_t accumulator, int channel)
 	if(!ch.enabled)
 		return accumulator;
 
-	// Defensive bounds check against the ROM allocation. During live
+	// Defensive bounds check against the ROM size. During live
 	// hot-reload the wave bank is rebuilt under an actively-sounding PCM
-	// channel; a stale/corrupt start+position can index past the ROM buffer,
+	// channel; a stale/corrupt start+position can index past the ROM,
 	// and an unchecked read there traps the whole wasm module ("memory access
-	// out of bounds"). Clamp to the allocation and stop the channel instead.
-	// (A stale offset that still lands inside the buffer reads the wrong, but
+	// out of bounds"). Clamp to the ROM size and stop the channel instead.
+	// (A stale offset that still lands inside the ROM reads the wrong, but
 	// in-bounds, sample data — brief garbage on the next relinked note, not a
 	// crash; that is acceptable and self-corrects on the next key-on.)
+	// The ROM past the last sample is zero.
 	const std::vector<uint8_t>& rom = driver->data.wave_rom.get_rom_data();
-	if(ch.start + ch.position >= rom.size())
+	uint32_t index = ch.start + ch.position;
+	if(index >= driver->data.wave_rom.get_max_size())
 	{
 		key_off(channel);
 		return accumulator;
 	}
 
-	uint8_t sample = rom[ch.start + ch.position];
+	uint8_t sample = index < rom.size() ? rom[index] : 0;
 
 	ch.position += ch.update_phase();
 	if(ch.count && !(--ch.count))
@@ -1486,9 +1488,9 @@ void MD_Driver::write_wave_rom()
 {
 	const std::vector<uint8_t>& dbdata = data.wave_rom.get_rom_data();
 	vgm->datablock(0x00,
-		dbdata.size() - data.wave_rom.get_free_bytes(),
+		dbdata.size(),
 		dbdata.data(),
-		dbdata.size());
+		data.wave_rom.get_max_size());
 }
 
 //! Reset sound chips, etc.

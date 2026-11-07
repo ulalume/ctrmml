@@ -88,16 +88,17 @@ void Basic_Player::step_event()
 	off_time = 0;
 	if(position == loop_reset_position)
 		loop_reset_count = loop_count;
-	try
+	// Read the next event
+	unsigned long next = position++;
+	if(next < track->get_event_count())
 	{
-		// Read the next event
-		track_event = &track->get_event(position++);
+		track_event = &track->get_event(next);
 		// Set the event time
 		if(track_event->play_time > play_time)
 			track_event->play_time = play_time;
 		event = *track_event;
 	}
-	catch(std::out_of_range&)
+	else
 	{
 		// reached the end
 		event = {Event::END, 0, 0, 0, UINT_MAX, reference};

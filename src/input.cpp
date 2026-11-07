@@ -34,14 +34,20 @@ const char* InputError::what()
 
 //! Creates an InputRef.
 InputRef::InputRef(const std::string &fn, const std::string &ln, int lno, int col)
-	: filename(fn), line_contents(ln), line(lno), column(col)
+	: filename(std::make_shared<const std::string>(fn)), line_contents(ln), line(lno), column(col)
+{
+}
+
+//! Creates an InputRef that shares the file name with other references.
+InputRef::InputRef(std::shared_ptr<const std::string> fn, const std::string &ln, int lno, int col)
+	: filename(std::move(fn)), line_contents(ln), line(lno), column(col)
 {
 }
 
 //! Return the file name
 const std::string& InputRef::get_filename() const
 {
-	return filename;
+	return *filename;
 }
 
 //! Return the line number
@@ -73,7 +79,7 @@ std::ostream& operator<<(std::ostream& os, const class InputRef& ref)
 
 //! Creates an Input.
 Input::Input(Song* song)
-	: song(song), filename("")
+	: song(song), filename(std::make_shared<const std::string>())
 {
 }
 
@@ -93,7 +99,7 @@ void Input::open_file(const std::string& fn)
 	int path_break = fn.find_last_of("/\\");
 	if(path_break != -1)
 		song->add_tag("include_path", fn.substr(0, path_break + 1));
-	filename = fn;
+	filename = std::make_shared<const std::string>(fn);
 	parse_file();
 }
 
@@ -106,6 +112,12 @@ Song& Input::get_song()
 //! Get current filename
 const std::string &Input::get_filename()
 {
+	return *filename;
+}
+
+//! Get current filename, to share with InputRefs.
+const std::shared_ptr<const std::string>& Input::get_shared_filename()
+{
 	return filename;
 }
 
@@ -116,8 +128,7 @@ const std::string &Input::get_filename()
  */
 std::shared_ptr<InputRef> Input::get_reference()
 {
-	InputRef r = InputRef(filename);
-	return std::make_shared<InputRef>(r);
+	return std::make_shared<InputRef>(filename, "", 0, 0);
 }
 
 //! Throw an InputError.
@@ -295,8 +306,7 @@ void Line_Input::parse_file()
 
 std::shared_ptr<InputRef> Line_Input::get_reference()
 {
-	InputRef r = InputRef(get_filename(), *buffer, line, column);
-	return std::make_shared<InputRef>(r);
+	return std::make_shared<InputRef>(get_shared_filename(), *buffer, line, column);
 }
 
 //! Read a single input line and parse it.

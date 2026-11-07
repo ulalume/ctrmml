@@ -14,7 +14,7 @@
 Song::Song()
 	: tag_map()
 	, track_map()
-	, file_map()
+	, sample_map()
 	, ppqn(24)
 	, platform_command_index(-32768)
 	, platform_key("megadrive")
@@ -345,16 +345,16 @@ bool Song::set_platform(const std::string& key)
 	return 0;
 }
 
-//! Get a reference to the file map.
-File_Map& Song::get_file_map()
+//! Get a reference to the sample map.
+Wave_Bank::Encoded_Sample_Map& Song::get_sample_map()
 {
-	return file_map;
+	return sample_map;
 }
 
-//! Get a reference to the file map.
-const File_Map& Song::get_file_map() const
+//! Get a reference to the sample map.
+const Wave_Bank::Encoded_Sample_Map& Song::get_sample_map() const
 {
-	return file_map;
+	return sample_map;
 }
 
 std::shared_ptr<Driver> Platform::get_driver(unsigned int rate, VGM_Interface* vgm_interface) const

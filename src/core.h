@@ -27,7 +27,6 @@ class Platform;
 typedef std::vector<std::string> Tag;
 typedef std::map<std::string,Tag> Tag_Map;
 typedef std::map<uint16_t,Track> Track_Map;
-typedef std::map<std::string,std::vector<uint8_t>> File_Map;
 typedef std::shared_ptr<InputRef> InputRefPtr;
 
 #endif

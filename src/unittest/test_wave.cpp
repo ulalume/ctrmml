@@ -17,6 +17,7 @@ class Wave_Bank_Test : public CppUnit::TestFixture
 	CPPUNIT_TEST(test_offset_sample_added_again);
 	CPPUNIT_TEST(test_offset_sample_loop_points);
 	CPPUNIT_TEST(test_linker_offset_samples);
+	CPPUNIT_TEST(test_rom_data_end);
 	CPPUNIT_TEST_SUITE_END();
 private:
 	static std::vector<uint8_t> make_data(uint8_t first, unsigned int size)
@@ -44,21 +45,12 @@ private:
 
 	static uint32_t used_bytes(Wave_Bank& bank)
 	{
-		return bank.get_rom_data().size() - bank.get_free_bytes();
+		return bank.get_rom_data().size();
 	}
 
-	// 8-bit mono WAV file.
-	static std::vector<uint8_t> make_wav(const std::vector<uint8_t>& data)
+	static Wave_Bank::Encoded_Sample make_sample(const std::vector<uint8_t>& data)
 	{
-		std::vector<uint8_t> wav = {'R','I','F','F',0,0,0,0,'W','A','V','E',
-			'f','m','t',' ',16,0,0,0, 1,0, 1,0, 0,0,0,0, 0,0,0,0, 1,0, 8,0,
-			'd','a','t','a',0,0,0,0};
-		write_le32(wav, 24, 17500);
-		write_le32(wav, 28, 17500);
-		write_le32(wav, 40, data.size());
-		wav.insert(wav.end(), data.begin(), data.end());
-		write_le32(wav, 4, wav.size() - 8);
-		return wav;
+		return {make_header(data.size(), 0), data};
 	}
 
 public:
@@ -129,6 +121,26 @@ public:
 		}
 	}
 
+	// The ROM data ends with the last sample, and reads as zero after it.
+	void test_rom_data_end()
+	{
+		Wave_Bank bank(0x100);
+		auto data = make_data(0x10, 8);
+		unsigned int id = bank.add_sample(make_header(8, 0), data);
+		CPPUNIT_ASSERT_EQUAL((size_t)8, bank.get_rom_data().size());
+		CPPUNIT_ASSERT_EQUAL(0x100u, bank.get_max_size());
+
+		auto padded = data;
+		padded.resize(12, 0);
+		unsigned int padded_id = bank.add_sample(make_header(12, 0), padded);
+		CPPUNIT_ASSERT(id != padded_id);
+		CPPUNIT_ASSERT_EQUAL(bank.get_sample_headers().at(id).position, bank.get_sample_headers().at(padded_id).position);
+		CPPUNIT_ASSERT_EQUAL((size_t)8, bank.get_rom_data().size());
+
+		bank.add_sample(make_header(4, 0), make_data(0xa0, 4));
+		CPPUNIT_ASSERT_EQUAL((size_t)12, bank.get_rom_data().size());
+	}
+
 	// Samples linked from an .MDS play the same bytes as in the song.
 	// @1 is unused, so @2 is the only header pointing at its data.
 	void test_linker_offset_samples()
@@ -136,8 +148,8 @@ public:
 		auto a = make_data(0x10, 16);
 		auto b = make_data(0xa0, 16);
 		Song song;
-		song.get_file_map()["a.wav"] = make_wav(a);
-		song.get_file_map()["b.wav"] = make_wav(b);
+		song.get_sample_map()["a.wav"] = make_sample(a);
+		song.get_sample_map()["b.wav"] = make_sample(b);
 		MML_Input input(&song);
 		input.read_line("@1 pcm \"a.wav\"");
 		input.read_line("@2 pcm \"a.wav\" offset=4");
