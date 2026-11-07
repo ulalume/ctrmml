@@ -18,12 +18,15 @@ class Wave_File
 
 		// Methods to modify waveforms
 		int read(const std::string& filename);
+		int read(const uint8_t* filebuf, uint32_t filesize);
 		void add_sample(const int16_t* sample, int count);
+
+		const std::string& get_error() const;
 
 		//int save(const std::string& filename);
 
 	private:
-		int load_file(const std::string& filename, uint8_t** buffer, uint32_t* filesize);
+		static int load_file(const std::string& filename, std::vector<uint8_t>& buffer);
 		uint32_t parse_chunk(const uint8_t* fdata);
 
 		uint16_t channels;
@@ -40,6 +43,8 @@ class Wave_File
 
 		// data[channel][n]
 		std::vector<std::vector<int16_t>> data;
+
+		std::string error_message;
 };
 
 //! Base wave rom bank
@@ -68,6 +73,8 @@ class Wave_Bank
 
 		// Helper methods
 		void set_include_paths(const Tag& tag);
+		static int read_sample_file(const std::string& filename, const Tag& include_paths,
+			Wave_File& wave, std::vector<uint8_t>* contents = nullptr);
 
 		// Methods to modify wave ROM memory
 		unsigned int add_sample(const Tag& tag);

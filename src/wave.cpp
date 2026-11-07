@@ -41,37 +41,46 @@ Wave_File::~Wave_File()
 	return;
 }
 
+//! Read a WAV file from disk.
+/*!
+ *  \return 0 on success, -1 on failure. See get_error() for the reason.
+ */
 int Wave_File::read(const std::string& filename)
 {
-	uint8_t* filebuf;
-	uint32_t filesize, pos=0, wavesize;
-	channels = 0;
-
-	if(load_file(filename,&filebuf,&filesize))
+	std::vector<uint8_t> file;
+	if(load_file(filename, file))
 	{
+		error_message = "cannot open file";
 		return -1;
 	}
+	return read(file.data(), file.size());
+}
+
+//! Read a WAV file from memory.
+/*!
+ *  \return 0 on success, -1 on failure. See get_error() for the reason.
+ */
+int Wave_File::read(const uint8_t* filebuf, uint32_t filesize)
+{
+	uint32_t pos=0, wavesize;
+	channels = 0;
+	error_message.clear();
+
 	if(filesize < 13)
 	{
-		fprintf(stderr,"Malformed wav file '%s'\n", filename.c_str());
+		error_message = "malformed WAV file";
 		return -1;
 	}
 	if(memcmp(&filebuf[0],"RIFF",4))
 	{
-		fprintf(stderr,"Riff header not found in '%s'\n", filename.c_str());
+		error_message = "RIFF header not found";
 		return -1;
 	}
 	wavesize = (*(uint32_t*)(filebuf+4)) + 8;
 	pos += 8;
-	if(filesize != wavesize)
-	{
-		fprintf(stderr,"Warning: reported file size and actual file size do not match.\n"
-				"Reported %d, actual %d\n", wavesize, filesize);
-
-	}
 	if(memcmp(&filebuf[pos],"WAVE",4))
 	{
-		fprintf(stderr,"'%s' is not a WAVE format file.\n", filename.c_str());
+		error_message = "not a WAVE format file";
 		return -1;
 	}
 	pos += 4;
@@ -82,13 +91,14 @@ int Wave_File::read(const std::string& filename)
 		chunksize = *(uint32_t*)(filebuf+pos+4) + 8;
 		if(pos+chunksize > filesize)
 		{
-			printf("Illegal chunk size (%d, %d)\n", pos+chunksize+8, filesize);
+			error_message = "illegal chunk size";
 			return -1;
 		}
 		ret = parse_chunk(filebuf+pos);
 		if(!ret)
 		{
-			printf("Failed to parse chunk %c%c%c%c.\n",filebuf[pos],filebuf[pos+1],filebuf[pos+2],filebuf[pos+3]);
+			if(error_message.empty())
+				error_message = stringf("failed to parse chunk %c%c%c%c",filebuf[pos],filebuf[pos+1],filebuf[pos+2],filebuf[pos+3]);
 			return -1;
 		}
 		pos += chunksize;
@@ -96,19 +106,23 @@ int Wave_File::read(const std::string& filename)
 		if(pos & 1)
 			pos++;
 	}
-	free(filebuf);
 	return 0;
 }
 
-int Wave_File::load_file(const std::string& filename, uint8_t** buffer, uint32_t* filesize)
+//! Get the reason the last read() failed.
+const std::string& Wave_File::get_error() const
+{
+	return error_message;
+}
+
+int Wave_File::load_file(const std::string& filename, std::vector<uint8_t>& buffer)
 {
 	if(std::ifstream is{filename, std::ios::binary|std::ios::ate})
 	{
 		auto size = is.tellg();
-		*filesize = size;
-		*buffer = (uint8_t*)calloc(1,size);
+		buffer.resize(size);
 		is.seekg(0);
-		if(is.read((char*)*buffer, size))
+		if(is.read((char*)buffer.data(), size))
 			return 0;
 	}
 	return -1;
@@ -135,7 +149,7 @@ uint32_t Wave_File::parse_chunk(const uint8_t *fdata)
 			slength = 0;
 			if(stype != 1 || channels > 2 || step == 0)
 			{
-				fprintf(stderr,"unsupported format\n");
+				error_message = "unsupported format";
 				return 0;
 			}
 			if(data.size() != channels)
@@ -213,10 +227,46 @@ void Wave_Bank::set_include_paths(const Tag& tag)
 	include_paths = tag;
 }
 
+//! Read the file of a sample definition.
+/*!
+ *  The file is read from the first include path where it can be read as a
+ *  WAV file.
+ *
+ *  \param filename  File name from the sample definition.
+ *  \param include_paths Paths prepended to \p filename, in search order.
+ *  \param wave      Receives the parsed file. If no file could be parsed,
+ *                   get_error() returns the first parse error, or an empty
+ *                   string if no file was found.
+ *  \param contents  If not null, receives the file contents.
+ *  \return 0 on success, -1 on failure.
+ */
+int Wave_Bank::read_sample_file(const std::string& filename, const Tag& include_paths,
+	Wave_File& wave, std::vector<uint8_t>* contents)
+{
+	std::string error;
+	for(auto&& path : include_paths)
+	{
+		std::vector<uint8_t> file;
+		if(Wave_File::load_file(path + filename, file))
+			continue;
+		wave = Wave_File();
+		if(wave.read(file.data(), file.size()) == 0)
+		{
+			if(contents)
+				*contents = std::move(file);
+			return 0;
+		}
+		if(error.empty())
+			error = wave.get_error();
+	}
+	wave = Wave_File();
+	wave.error_message = error;
+	return -1;
+}
+
 //! Convert and add sample to the waverom.
 unsigned int Wave_Bank::add_sample(const Tag& tag)
 {
-	int status = -1;
 	if(!tag.size())
 	{
 		error_message = "Incomplete sample definition";
@@ -224,17 +274,12 @@ unsigned int Wave_Bank::add_sample(const Tag& tag)
 	}
 	std::string filename = tag[0];
 	Wave_File wf;
-	for(auto&& i : include_paths)
+	if(read_sample_file(filename, include_paths, wf))
 	{
-		std::string fn = i + filename;
-		//std::cout << "attempt to load " << fn << "\n";
-		status = wf.read(fn);
-		if(status == 0)
-			break;
-	}
-	if(status)
-	{
-		error_message = filename + " not found";
+		if(wf.get_error().empty())
+			error_message = filename + " not found";
+		else
+			error_message = filename + ": " + wf.get_error();
 		throw InputError(nullptr, error_message.c_str());
 	}
 
