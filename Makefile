@@ -33,6 +33,7 @@ endif
 CORE_OBJS = \
 	$(OBJ)/track.o \
 	$(OBJ)/song.o \
+	$(OBJ)/song_blob.o \
 	$(OBJ)/input.o \
 	$(OBJ)/mml_input.o \
 	$(OBJ)/player.o \

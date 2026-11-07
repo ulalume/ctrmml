@@ -9,6 +9,7 @@ pkg_check_modules(CPPUNIT cppunit)
 add_library(ctrmml
 	src/track.cpp
 	src/song.cpp
+	src/song_blob.cpp
 	src/input.cpp
 	src/mml_input.cpp
 	src/player.cpp

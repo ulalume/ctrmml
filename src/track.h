@@ -144,6 +144,7 @@ class Track
 
 		// Methods to retrieve Events
 		std::vector<Event>& get_events();
+		const std::vector<Event>& get_events() const;
 		Event& get_event(unsigned long position);
 		unsigned long get_event_count() const;
 

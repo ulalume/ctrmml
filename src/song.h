@@ -30,6 +30,7 @@ class Song
 		virtual ~Song();
 
 		Tag_Map& get_tag_map();
+		const Tag_Map& get_tag_map() const;
 		void add_tag(const std::string& key, std::string value);
 		void add_tag_list(const std::string &key, const std::string &value);
 		void set_tag(const std::string& key, std::string value);
@@ -47,11 +48,13 @@ class Song
 		Track& make_track(uint16_t id);
 
 		Track_Map& get_track_map();
+		const Track_Map& get_track_map() const;
 
 		uint16_t get_ppqn() const;
 		void set_ppqn(uint16_t new_ppqn);
 
 		bool set_platform(const std::string& key);
+		const std::string& get_platform_key() const;
 		const Platform* get_platform() const;
 
 		File_Map& get_file_map();
@@ -64,6 +67,7 @@ class Song
 		uint16_t ppqn;
 		int16_t platform_command_index;
 
+		std::string platform_key;
 		Platform* platform;
 };
 

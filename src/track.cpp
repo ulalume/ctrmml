@@ -388,6 +388,12 @@ std::vector<Event>& Track::get_events()
 	return events;
 }
 
+//! Get the events list.
+const std::vector<Event>& Track::get_events() const
+{
+	return events;
+}
+
 //! Get the Event at the specified position.
 /*!
  * \param position Position of event in the track.
