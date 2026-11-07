@@ -266,10 +266,7 @@ class MD_PCMDriver
 		void key_on(int channel);
 		void key_off(int channel);
 
-		//! Key off every active PCM channel. Called on live hot-reload: a
-		//! channel sounding across a relink holds a start/position into the
-		//! pre-reload wave bank, which read_song has just rebuilt, so its
-		//! sample data is stale — stop it cleanly rather than play garbage.
+		//! Key off every active PCM channel. Called on live hot-reload.
 		void silence_all();
 
 		void update();
@@ -312,6 +309,7 @@ class MD_Driver : public Driver
 		uint8_t bpm_to_delta(uint16_t bpm);
 		void seq_update();
 		void reset_loop_count();
+		void write_wave_rom();
 		std::unique_ptr<MD_Channel> make_channel_for_track(int track_id);
 
 		MDSDRV_Data data;

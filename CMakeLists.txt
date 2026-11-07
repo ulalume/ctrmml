@@ -42,6 +42,7 @@ if(CPPUNIT_FOUND)
 		src/unittest/test_riff.cpp
 		src/unittest/test_conf.cpp
 		src/unittest/test_mdsdrv.cpp
+		src/unittest/test_md_driver.cpp
 		src/unittest/test_misc.cpp
 		src/unittest/main.cpp)
 	target_link_libraries(ctrmml_unittest ctrmml)
