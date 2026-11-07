@@ -328,7 +328,6 @@ unsigned int Wave_Bank::add_sample(Wave_Bank::Sample header, const std::vector<u
 			current_size = start_pos + header.size;
 		}
 
-		printf("Append sample %d to ROM at %08x (size %08x)\n", samples.size(), start_pos, header.size);
 		std::copy_n(sample.begin(), header.size, rom_data.begin() + start_pos);
 		header.position = start_pos;
 		samples.push_back(header);

@@ -340,7 +340,6 @@ uint32_t MD_Channel::parse_platform_event(const Tag& tag, int16_t* platform_stat
 		driver->pcm_rate = driver->pcm.set_mode(data);
 		driver->pcm_counter = 0;
 		driver->pcm_delta = driver->get_rate()/driver->pcm_rate;
-		printf("set rate to %f", driver->pcm_delta);
 	}
 	else if(iequal(tag[0], "carry"))
 	{
@@ -430,15 +429,9 @@ void MD_Channel::update_tempo()
 {
 	clear_update_flag(Event::TEMPO);
 	if(bpm_flag())
-	{
 		driver->tempo_delta = driver->bpm_to_delta(get_var(Event::TEMPO));
-		printf("set tempo to %02x (%d bpm)\n", driver->tempo_delta, get_var(Event::TEMPO));
-	}
 	else
-	{
 		driver->tempo_delta = get_var(Event::TEMPO);
-		printf("set tempo to %02x (direct)\n", driver->tempo_delta);
-	}
 }
 
 void MD_Channel::update_state()
