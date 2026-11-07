@@ -34,6 +34,7 @@ if(CPPUNIT_FOUND)
 	add_executable(ctrmml_unittest
 		src/unittest/test_track.cpp
 		src/unittest/test_song.cpp
+		src/unittest/test_song_blob.cpp
 		src/unittest/test_input.cpp
 		src/unittest/test_mml_input.cpp
 		src/unittest/test_player.cpp
