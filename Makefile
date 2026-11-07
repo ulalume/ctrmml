@@ -69,6 +69,7 @@ UNITTEST_OBJS = \
 	$(OBJ)/unittest/test_mdsdrv.o \
 	$(OBJ)/unittest/test_md_driver.o \
 	$(OBJ)/unittest/test_misc.o \
+	$(OBJ)/unittest/test_wave.o \
 	$(OBJ)/unittest/main.o
 
 SAMPLE_MML = \

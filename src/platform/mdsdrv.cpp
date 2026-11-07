@@ -1582,8 +1582,10 @@ void MDSDRV_Linker::add_song(RIFF& mds, const std::string& filename)
 			uint32_t addr = seq_sdata + read_le32(data, 0)*2;
 			Wave_Bank::Sample header;
 			header.from_bytes(std::vector<uint8_t>(data.begin()+4, data.end()));
+			if((uint64_t)header.position + header.start + header.size > pcmd.size())
+				throw InputError(nullptr, ".MDS PCM data is malformed");
 			auto begin = pcmd.begin() + header.position;
-			auto end = pcmd.begin() + header.position + header.size;
+			auto end = begin + header.start + header.size;
 			header.position = 0;
 			uint16_t offset = wave_rom.add_sample(header, std::vector<uint8_t>(begin, end));
 
