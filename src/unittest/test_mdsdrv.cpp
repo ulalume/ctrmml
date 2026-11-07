@@ -447,6 +447,13 @@ public:
 			warning_input.read_line("@6 psg 15", 5);
 			warning_input.read_line("  /", 6);
 			warning_input.read_line("G @1 o5 l4 c", 7);
+
+			// Reading a song again replaces the warnings.
+			MDSDRV_Data data;
+			data.read_song(warning_song);
+			data.read_song(warning_song);
+			CPPUNIT_ASSERT(data.message.find(warning) != std::string::npos);
+			CPPUNIT_ASSERT_EQUAL(data.message.find(warning), data.message.rfind(warning));
 		}
 		std::cerr.rdbuf(stderr_buffer);
 		CPPUNIT_ASSERT(warning_output.str().find(diagnostic) != std::string::npos);

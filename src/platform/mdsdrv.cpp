@@ -60,6 +60,7 @@ void MDSDRV_Data::read_song(Song& song)
 	pitch_map.clear();
 	wave_map.clear();
 	ins_type.clear();
+	message.clear();
 	try
 	{
 		// just do this if we have this tag
@@ -97,12 +98,10 @@ void MDSDRV_Data::read_song(Song& song)
 			try
 			{
 				add_pitch_envelope(id, tag);
-				message += "read pitch envelope " + dump_data(id, pitch_map[id]) + "\n";
 			}
 			catch(std::invalid_argument &)
 			{
 				add_extended_pitch_envelope(id, tag);
-				message += "read extended pitch envelope " + dump_data(id, pitch_map[id]) + "\n";
 			}
 		}
 	}
@@ -114,33 +113,15 @@ void MDSDRV_Data::add_instrument(uint16_t id, const Tag& tag)
 	auto it = tag.begin();
 	std::string type = *it++;
 	if(iequal("fm", type))
-	{
 		add_ins_fm_4op(id, Tag(it, tag.end()));
-		message += "read FM envelope " + dump_data(id, envelope_map[id]) + "\n";
-		return;
-	}
 	else if(iequal("2op", type))
-	{
 		add_ins_fm_2op(id, Tag(it, tag.end()));
-		message += "read 2op envelope " + dump_data(id, envelope_map[id]) + "\n";
-		return;
-	}
 	else if(iequal("psg", type))
-	{
 		add_ins_psg(id, Tag(it, tag.end()));
-		message += "read PSG envelope " + dump_data(id, envelope_map[id]) + "\n";
-		return;
-	}
 	else if(iequal("pcm", type))
-	{
 		add_ins_pcm(id, Tag(it, tag.end()));
-		message += "read wave sample " + dump_data(id, envelope_map[id]) + "\n";
-		return;
-	}
 	else
-	{
 		throw InputError(nullptr, stringf("unknown envelope type %s\n",type.c_str()).c_str());
-	}
 }
 
 
@@ -555,22 +536,6 @@ int MDSDRV_Data::add_unique_data(const std::vector<uint8_t>& data)
 	}
 	data_bank.push_back(data);
 	return i;
-}
-
-//! Dump data bank index to a string for debugging purposes.
-std::string MDSDRV_Data::dump_data(uint16_t id, uint16_t mapped_id)
-{
-	std::string out = stringf("%d = %d [%d]{", id, mapped_id, data_bank[mapped_id].size());
-	for(auto it = data_bank[mapped_id].begin(); it != data_bank[mapped_id].end(); it++)
-	{
-		if(it != data_bank[mapped_id].begin())
-		{
-			out += ", ";
-		}
-		out += stringf("%02x", *it);
-	}
-	out += "}";
-	return out;
 }
 
 //=====================================================================
