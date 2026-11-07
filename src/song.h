@@ -3,6 +3,7 @@
 #define SONG_H
 #include <stdint.h>
 #include <memory>
+#include <string>
 #include <utility>
 
 #include "core.h"
