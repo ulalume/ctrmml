@@ -17,6 +17,7 @@ class Song_Blob_Test : public CppUnit::TestFixture
 	CPPUNIT_TEST(test_reserialize);
 	CPPUNIT_TEST(test_vgm_output);
 	CPPUNIT_TEST(test_missing_sample);
+	CPPUNIT_TEST(test_locations);
 	CPPUNIT_TEST(test_invalid_data);
 	CPPUNIT_TEST_SUITE_END();
 private:
@@ -146,6 +147,43 @@ public:
 		round_trip();
 		CPPUNIT_ASSERT_EQUAL((size_t)0, copy->get_sample_map().size());
 		CPPUNIT_ASSERT_THROW(copy->get_platform()->get_export_data(*copy, 0), InputError);
+	}
+	void test_locations()
+	{
+		mml_input->open_file("sample/idk.mml");
+		round_trip();
+		for(auto&& track : copy->get_track_map())
+			for(auto&& event : track.second.get_events())
+				CPPUNIT_ASSERT(event.reference == nullptr);
+
+		std::vector<uint8_t> blob = serialize_song(*song, true);
+		deserialize_song(blob.data(), blob.size(), *copy);
+		const std::string* filename = nullptr;
+		for(auto&& track : song->get_track_map())
+		{
+			const std::vector<Event>& expected = track.second.get_events();
+			const std::vector<Event>& actual = copy->get_track(track.first).get_events();
+			CPPUNIT_ASSERT_EQUAL(expected.size(), actual.size());
+			for(unsigned int i = 0; i < expected.size(); i++)
+			{
+				if(!expected[i].reference)
+				{
+					CPPUNIT_ASSERT(actual[i].reference == nullptr);
+					continue;
+				}
+				CPPUNIT_ASSERT(actual[i].reference != nullptr);
+				CPPUNIT_ASSERT_EQUAL(expected[i].reference->get_filename(), actual[i].reference->get_filename());
+				CPPUNIT_ASSERT_EQUAL(expected[i].reference->get_line(), actual[i].reference->get_line());
+				CPPUNIT_ASSERT_EQUAL(expected[i].reference->get_column(), actual[i].reference->get_column());
+				// One file name for every reference
+				if(filename)
+					CPPUNIT_ASSERT_EQUAL(filename, &actual[i].reference->get_filename());
+				filename = &actual[i].reference->get_filename();
+			}
+		}
+		CPPUNIT_ASSERT(filename != nullptr);
+		CPPUNIT_ASSERT(serialize_song(*copy, true) == blob);
+		CPPUNIT_ASSERT_THROW(deserialize_song(blob.data(), blob.size() - 1, *copy), std::invalid_argument);
 	}
 	void test_invalid_data()
 	{

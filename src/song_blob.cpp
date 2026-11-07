@@ -5,7 +5,7 @@
  *  so that it can be played without the input files.
  *
  *  All integers are little-endian. A string is a u32 length followed by
- *  that many bytes.
+ *  that many bytes. A varint is an unsigned LEB128 number.
  *
  *      char[4]  magic "CSNG"
  *      u32      version (2)
@@ -20,13 +20,19 @@
  *                   string file name
  *                   u32[8] Wave_Bank::Sample header, as Sample::to_bytes()
  *                   u32 size, data
+ *      u32      source file count, then each file name as a string. If the
+ *               count is not 0, then for each event in the order above:
+ *                   varint 0 for an event without a location, otherwise
+ *                          its file name index + 1, followed by
+ *                   varint line
+ *                   varint column
  *
  *  Tags are limited to those read by the driver: instruments and envelopes
  *  ('@' prefix), platform commands ('cmd_' prefix), "#option" and the tag
  *  order list. The include paths are replaced by the samples of the PCM
  *  instruments, encoded as Wave_Bank::get_encoded_sample() returns them, so
- *  a deserialized song does not read any files. Input references are not
- *  stored.
+ *  a deserialized song does not read any files. Of the input references,
+ *  only the file name, line and column are stored, and only if asked for.
  */
 #include <climits>
 #include <cstdio>
@@ -116,6 +122,15 @@ class Writer
 			u32(value.size());
 			bytes((const uint8_t*)value.data(), value.size());
 		}
+		void varint(uint32_t value)
+		{
+			while(value >= 0x80)
+			{
+				u8(value | 0x80);
+				value >>= 7;
+			}
+			u8(value);
+		}
 
 		std::vector<uint8_t> out;
 };
@@ -151,6 +166,18 @@ class Reader
 			uint32_t size = u32();
 			return std::string((const char*)take(size), size);
 		}
+		uint32_t varint()
+		{
+			uint32_t value = 0;
+			for(int shift = 0; shift < 32; shift += 7)
+			{
+				uint8_t byte = u8();
+				value |= (uint32_t)(byte & 0x7f) << shift;
+				if(!(byte & 0x80))
+					return value;
+			}
+			throw std::invalid_argument("invalid number in serialized song");
+		}
 		//! Read an element count, each element using at least \p min_size bytes.
 		uint32_t count(size_t min_size)
 		{
@@ -184,8 +211,11 @@ class Reader
 /*!
  *  Samples of PCM instruments are taken from the song's sample map or read
  *  from its include paths, and stored with the song.
+ *
+ *  \param locations Store the source location of each event, so that errors
+ *                   during playback of the deserialized song carry them.
  */
-std::vector<uint8_t> serialize_song(const Song& song)
+std::vector<uint8_t> serialize_song(const Song& song, bool locations)
 {
 	Writer w;
 	w.bytes((const uint8_t*)magic, 4);
@@ -247,6 +277,43 @@ std::vector<uint8_t> serialize_song(const Song& song)
 		w.bytes(header.data(), header.size());
 		w.u32(sample.second->data.size());
 		w.bytes(sample.second->data.data(), sample.second->data.size());
+	}
+
+	std::map<std::string, uint32_t> file_index;
+	std::vector<const std::string*> file_names;
+	if(locations)
+	{
+		for(auto&& track : tracks)
+		{
+			for(auto&& event : track.second.get_events())
+			{
+				if(!event.reference)
+					continue;
+				const std::string& name = event.reference->get_filename();
+				if(file_index.emplace(name, file_names.size()).second)
+					file_names.push_back(&name);
+			}
+		}
+	}
+	w.u32(file_names.size());
+	for(auto&& name : file_names)
+		w.str(*name);
+	if(file_names.size())
+	{
+		for(auto&& track : tracks)
+		{
+			for(auto&& event : track.second.get_events())
+			{
+				if(!event.reference)
+				{
+					w.varint(0);
+					continue;
+				}
+				w.varint(file_index.at(event.reference->get_filename()) + 1);
+				w.varint(event.reference->get_line());
+				w.varint(event.reference->get_column());
+			}
+		}
 	}
 	return w.out;
 }
@@ -314,6 +381,36 @@ void deserialize_song(const uint8_t* data, size_t size, Song& song)
 		uint32_t data_size = r.u32();
 		const uint8_t* data = r.bytes(data_size);
 		sample.data.assign(data, data + data_size);
+	}
+
+	uint32_t file_count = r.count(4);
+	std::vector<std::shared_ptr<const std::string>> file_names;
+	file_names.reserve(file_count);
+	for(uint32_t i = 0; i < file_count; i++)
+		file_names.push_back(std::make_shared<const std::string>(r.str()));
+	if(file_count)
+	{
+		size_t event_count = 0;
+		for(auto&& track : tracks)
+			event_count += track.second.get_events().size();
+		// One block holds every reference; the events share ownership of it.
+		auto references = std::make_shared<std::vector<InputRef>>();
+		references->reserve(event_count);
+		for(auto&& track : tracks)
+		{
+			for(auto&& event : track.second.get_events())
+			{
+				uint32_t file = r.varint();
+				if(!file)
+					continue;
+				if(file > file_count)
+					throw std::invalid_argument("invalid source location in serialized song");
+				uint32_t line = r.varint();
+				uint32_t column = r.varint();
+				references->emplace_back(file_names[file - 1], "", line, column);
+				event.reference = std::shared_ptr<InputRef>(references, &references->back());
+			}
+		}
 	}
 	if(!r.at_end())
 		throw std::invalid_argument("unexpected data after serialized song");
